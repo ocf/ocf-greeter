@@ -1,11 +1,15 @@
 use iced::keyboard::{self, Key, key};
-use iced::widget::{button, column, container, operation, pick_list, text_input};
+use iced::widget::{
+    bottom, bottom_right, button, column, container, image, operation, pick_list, stack, text,
+    text_input,
+};
 use iced::{
-    Element, Event, Length, Subscription, Task, Theme,
+    ContentFit, Element, Event, Length, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
 };
 use std::env;
 use std::path::Path;
+use sys_info::linux_os_release;
 mod ipc;
 mod sessions;
 
@@ -28,31 +32,39 @@ struct State {
 }
 
 fn view(state: &State) -> Element<'_, Message> {
-    container(
+    stack![
+        image("assets/background.png")
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .content_fit(ContentFit::Cover),
         container(
-            column![
-                text_input("Username", &state.username).on_input(Message::UsernameUpdate),
-                text_input("Password", &state.password)
-                    .on_input(Message::PasswordUpdate)
-                    .secure(true),
-                button("Login").on_press(Message::Login),
-                pick_list(
-                    state.sessions.as_slice(),
-                    Some(&state.selected_session),
-                    Message::SessionSelected
-                ),
-            ]
-            .spacing(5),
+            container(
+                column![
+                    text_input("Username", &state.username).on_input(Message::UsernameUpdate),
+                    text_input("Password", &state.password)
+                        .on_input(Message::PasswordUpdate)
+                        .secure(true),
+                    button("Login").on_press(Message::Login),
+                ]
+                .spacing(5),
+            )
+            .style(container::rounded_box)
+            .padding(30)
+            .width(400)
+            .height(200)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center),
         )
-        .style(container::rounded_box)
-        .padding(30)
-        .width(400)
-        .height(200)
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Center),
-    )
-    .center_x(Length::Fill)
-    .center_y(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill),
+        bottom_right(pick_list(
+            state.sessions.as_slice(),
+            Some(&state.selected_session),
+            Message::SessionSelected
+        ))
+        .padding(5),
+        bottom(text(linux_os_release().unwrap().build_id.unwrap())).padding(5)
+    ]
     .into()
 }
 
