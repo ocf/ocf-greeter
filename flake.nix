@@ -19,7 +19,17 @@
       flake-utils,
       treefmt-nix,
     }:
-    flake-utils.lib.eachDefaultSystem (
+    let
+      overlay = final: prev: {
+        ocf-greeter = final.callPackage ./. {
+          craneLib = crane.mkLib final;
+        };
+      };
+    in
+    {
+      overlays.default = overlay;
+    }
+    // flake-utils.lib.eachDefaultSystem (
       system:
       let
         # see https://github.com/iced-rs/iced/blob/master/DEPENDENCIES.md
@@ -31,6 +41,7 @@
 
         pkgs = import nixpkgs {
           inherit system;
+          overlays = [ overlay ];
         };
 
         treefmtConfig = treefmt-nix.lib.evalModule pkgs {
@@ -40,9 +51,7 @@
         };
       in
       {
-        packages.default = pkgs.callPackage ./. {
-          craneLib = crane.mkLib pkgs;
-        };
+        packages.default = pkgs.ocf-greeter;
 
         formatter = treefmtConfig.config.build.wrapper;
         checks.formatting = treefmtConfig.config.build.check self;

@@ -12,6 +12,7 @@ let
     description = "Greeter for OCF desktops";
     homepage = "https://github.com/ocf/ocf-greeter";
     platforms = platforms.linux;
+    mainProgram = "ocf-greeter";
   };
   unwrapped = craneLib.buildPackage {
     inherit pname version meta;
