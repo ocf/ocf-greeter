@@ -1,10 +1,13 @@
 use iced::keyboard::{self, Key, key};
-use iced::widget::{button, column, container, operation, text_input};
+use iced::widget::{button, column, container, operation, pick_list, text_input};
 use iced::{
     Element, Event, Length, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
 };
+use std::env;
+use std::path::Path;
 mod ipc;
+mod sessions;
 
 #[derive(Debug, Clone)]
 enum Message {
@@ -13,12 +16,15 @@ enum Message {
     Login,
     FocusNext,
     FocusPrevious,
+    SessionSelected(sessions::DesktopSession),
 }
 
 #[derive(Default)]
 struct State {
     username: String,
     password: String,
+    sessions: Vec<sessions::DesktopSession>,
+    selected_session: sessions::DesktopSession,
 }
 
 fn view(state: &State) -> Element<'_, Message> {
@@ -30,6 +36,11 @@ fn view(state: &State) -> Element<'_, Message> {
                     .on_input(Message::PasswordUpdate)
                     .secure(true),
                 button("Login").on_press(Message::Login),
+                pick_list(
+                    state.sessions.as_slice(),
+                    Some(&state.selected_session),
+                    Message::SessionSelected
+                ),
             ]
             .spacing(5),
         )
@@ -57,12 +68,20 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
         }
         Message::Login => {
             println!("username: {}, password: {}", state.username, state.password);
-            let result = ipc::login("id", state.username.clone(), state.password.clone());
+            let result = ipc::login(
+                &state.selected_session.exec,
+                state.username.clone(),
+                state.password.clone(),
+            );
             println!("{:?}", result);
             Task::none()
         }
         Message::FocusNext => operation::focus_next(),
         Message::FocusPrevious => operation::focus_previous(),
+        Message::SessionSelected(session) => {
+            state.selected_session = session;
+            Task::none()
+        }
     }
 }
 
@@ -84,8 +103,29 @@ fn subscription(_state: &State) -> Subscription<Message> {
 }
 
 pub fn main() -> iced::Result {
-    iced::application(State::default, update, view)
-        .subscription(subscription)
-        .theme(Theme::CatppuccinLatte)
-        .run()
+    let args: Vec<String> = env::args().collect();
+    let sessions_path = Path::new(args.get(1).expect("expected a path to the sessions folder"));
+    let sessions = sessions::get_desktop_sessions(sessions_path);
+    let default_session_arg = args.get(2).expect("expected a default session");
+
+    let default_session = sessions
+        .iter()
+        .find(|item| &item.name == default_session_arg)
+        .cloned()
+        .expect("failed default session matching");
+
+    println!("{:?}", sessions);
+
+    iced::application(
+        move || State {
+            sessions: sessions.clone(),
+            selected_session: default_session.clone(),
+            ..Default::default()
+        },
+        update,
+        view,
+    )
+    .subscription(subscription)
+    .theme(Theme::CatppuccinLatte)
+    .run()
 }

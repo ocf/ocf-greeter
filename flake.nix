@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "https://channels.nixos.org/nixos-26.05/nixexprs.tar.zst";
+    nixpkgs-unstable.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst";
     crane.url = "github:ipetkov/crane";
     flake-utils.url = "github:numtide/flake-utils";
     treefmt-nix = {
@@ -15,6 +16,7 @@
     {
       self,
       nixpkgs,
+      nixpkgs-unstable,
       crane,
       flake-utils,
       treefmt-nix,
@@ -28,6 +30,52 @@
     in
     {
       overlays.default = overlay;
+      nixosConfigurations.test = nixpkgs-unstable.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = nixpkgs-unstable.lib.singleton (
+          {
+            pkgs,
+            lib,
+            config,
+            ...
+          }:
+          {
+            nixpkgs.overlays = [ overlay ];
+            services.greetd = {
+              enable = true;
+              settings = {
+                terminal.vt = 1;
+                default_session = {
+                  command = "${lib.getExe pkgs.cage} -s -- ${lib.getExe pkgs.ocf-greeter} ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions Sway";
+                  user = "greeter";
+                };
+              };
+            };
+
+            programs.sway.enable = true;
+
+            users = {
+              groups.test = { };
+              groups.greeter = { };
+              groups.users = { };
+              users.test = {
+                isNormalUser = true;
+                password = "test";
+                createHome = true;
+                group = "users";
+                extraGroups = [ "wheel" ];
+              };
+              users.greeter = {
+                isSystemUser = true;
+                group = "greeter";
+              };
+            };
+            security.sudo.wheelNeedsPassword = false;
+
+            system.stateVersion = "26.05";
+          }
+        );
+      };
     }
     // flake-utils.lib.eachDefaultSystem (
       system:
