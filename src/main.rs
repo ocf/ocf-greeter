@@ -4,6 +4,7 @@ use iced::{
     Element, Event, Length, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
 };
+mod ipc;
 
 #[derive(Debug, Clone)]
 enum Message {
@@ -56,6 +57,8 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
         }
         Message::Login => {
             println!("username: {}, password: {}", state.username, state.password);
+            let result = ipc::login("id", state.username.clone(), state.password.clone());
+            println!("{:?}", result);
             Task::none()
         }
         Message::FocusNext => operation::focus_next(),
