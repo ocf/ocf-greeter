@@ -1,6 +1,6 @@
 use iced::widget::{button, column, container, text_input};
 use iced::{
-    Element, Length,
+    Element, Length, Theme,
     alignment::{Horizontal, Vertical},
 };
 
@@ -50,5 +50,7 @@ fn update(state: &mut State, message: Message) {
 }
 
 pub fn main() -> iced::Result {
-    iced::run(update, view)
+    iced::application(State::default, update, view)
+        .theme(Theme::CatppuccinLatte)
+        .run()
 }
