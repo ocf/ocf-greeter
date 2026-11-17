@@ -33,7 +33,7 @@ struct State {
 
 fn view(state: &State) -> Element<'_, Message> {
     stack![
-        image("assets/background.png")
+        image("/etc/ocf-greeter/background.png")
             .width(Length::Fill)
             .height(Length::Fill)
             .content_fit(ContentFit::Cover),

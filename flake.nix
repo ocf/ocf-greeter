@@ -30,6 +30,11 @@
     in
     {
       overlays.default = overlay;
+      nixosModules.default = { ... }: {
+        imports = [ ./module.nix ];
+        nixpkgs.overlays = [ overlay ];
+      };
+
       nixosConfigurations.test = nixpkgs-unstable.lib.nixosSystem {
         system = "x86_64-linux";
         modules = nixpkgs-unstable.lib.singleton (
