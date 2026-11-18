@@ -34,6 +34,7 @@ struct State {
     sessions: Vec<sessions::DesktopSession>,
     selected_session: sessions::DesktopSession,
     error_text: String,
+    login_in_progress: bool,
 }
 
 async fn login_request(state: State) -> Message {
@@ -71,9 +72,13 @@ fn view(state: &State) -> Element<'_, Message> {
                     text_input("Password", &state.password)
                         .on_input(Message::PasswordUpdate)
                         .secure(true),
-                    button("Login").on_press(Message::Login),
-                    text(&state.error_text).color(color!(255, 0, 0)),
+                    button("Login")
+                        .on_press_maybe((!(state.login_in_progress)).then_some(Message::Login)),
                 ]
+                .extend(
+                    (!&state.error_text.is_empty())
+                        .then(|| text(&state.error_text).color(color!(255, 0, 0)).into())
+                )
                 .spacing(5),
             )
             .style(container::rounded_box)
@@ -106,19 +111,33 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             state.password = content;
             Task::none()
         }
-        Message::Login => Task::future(login_request(state.clone())),
+        Message::Login => {
+            match state.login_in_progress || state.username.is_empty() || state.password.is_empty()
+            {
+                false => {
+                    state.login_in_progress = true;
+                    Task::future(login_request(state.clone()))
+                }
+                true => Task::none(),
+            }
+        }
         Message::FocusNext => operation::focus_next(),
         Message::FocusPrevious => operation::focus_previous(),
         Message::SessionSelected(session) => {
             state.selected_session = session;
             Task::none()
         }
-        Message::LoginSuccess => Task::none(),
+        Message::LoginSuccess => {
+            state.login_in_progress = false;
+            Task::none()
+        }
         Message::LoginFailure => {
+            state.login_in_progress = false;
             state.error_text = "Login Failed".into();
             Task::none()
         }
         Message::LoginError(error) => {
+            state.login_in_progress = false;
             state.error_text = format!("Error: {}", error);
             println!("{:?}", error);
             Task::none()
