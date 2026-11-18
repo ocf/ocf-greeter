@@ -8,7 +8,7 @@ pub enum LoginResult {
 }
 
 // adapted from https://github.com/kennylevinsen/greetd/blob/master/agreety/src/main.rs
-pub fn login(
+pub async fn login(
     cmd: &str,
     username: String,
     password: String,

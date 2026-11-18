@@ -6,6 +6,7 @@ use iced::widget::{
 use iced::{
     ContentFit, Element, Event, Length, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
+    color,
 };
 use std::env;
 use std::path::Path;
@@ -18,17 +19,43 @@ enum Message {
     UsernameUpdate(String),
     PasswordUpdate(String),
     Login,
+    LoginFailure,
+    LoginError(String),
+    LoginSuccess,
     FocusNext,
     FocusPrevious,
     SessionSelected(sessions::DesktopSession),
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct State {
     username: String,
     password: String,
     sessions: Vec<sessions::DesktopSession>,
     selected_session: sessions::DesktopSession,
+    error_text: String,
+}
+
+async fn login_request(state: State) -> Message {
+    println!("username: {}, password: {}", state.username, state.password);
+    let response = ipc::login(
+        &state.selected_session.exec,
+        state.username.clone(),
+        state.password.clone(),
+    )
+    .await;
+    println!("{:?}", response);
+
+    match response {
+        Ok(result) => match result {
+            ipc::LoginResult::Success => Message::LoginSuccess,
+            ipc::LoginResult::Failure => Message::LoginFailure,
+        },
+        Err(e) => {
+            println!("ERROR: {}", e);
+            Message::LoginError(e.to_string())
+        }
+    }
 }
 
 fn view(state: &State) -> Element<'_, Message> {
@@ -45,6 +72,7 @@ fn view(state: &State) -> Element<'_, Message> {
                         .on_input(Message::PasswordUpdate)
                         .secure(true),
                     button("Login").on_press(Message::Login),
+                    text(&state.error_text).color(color!(255, 0, 0)),
                 ]
                 .spacing(5),
             )
@@ -78,20 +106,21 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             state.password = content;
             Task::none()
         }
-        Message::Login => {
-            println!("username: {}, password: {}", state.username, state.password);
-            let result = ipc::login(
-                &state.selected_session.exec,
-                state.username.clone(),
-                state.password.clone(),
-            );
-            println!("{:?}", result);
-            Task::none()
-        }
+        Message::Login => Task::future(login_request(state.clone())),
         Message::FocusNext => operation::focus_next(),
         Message::FocusPrevious => operation::focus_previous(),
         Message::SessionSelected(session) => {
             state.selected_session = session;
+            Task::none()
+        }
+        Message::LoginSuccess => Task::none(),
+        Message::LoginFailure => {
+            state.error_text = "Login Failed".into();
+            Task::none()
+        }
+        Message::LoginError(error) => {
+            state.error_text = format!("Error: {}", error);
+            println!("{:?}", error);
             Task::none()
         }
     }
