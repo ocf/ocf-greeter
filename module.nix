@@ -36,20 +36,7 @@ in
 
     services.greetd = {
       enable = true;
-      settings = {
-        terminal.vt = 1;
-        default_session = {
-          command = "${lib.getExe pkgs.cage} -s -- ${lib.getExe cfg.package} ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions ${cfg.defaultSession}";
-          user = "greeter";
-        };
-      };
-    };
-    users = {
-      users.greeter = {
-        isSystemUser = true;
-        group = "greeter";
-      };
-      groups.greeter = { };
+      settings.default_session.command = "${lib.getExe pkgs.cage} -s -- ${lib.getExe cfg.package} ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions ${cfg.defaultSession}";
     };
   };
 }
