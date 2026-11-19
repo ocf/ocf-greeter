@@ -1,6 +1,6 @@
 use iced::keyboard::{self, Key, key};
 use iced::widget::{
-    bottom, bottom_right, button, column, container, image, operation, pick_list, stack, text,
+    Id, bottom, bottom_right, button, column, container, image, operation, pick_list, stack, text,
     text_input,
 };
 use iced::{
@@ -37,6 +37,8 @@ struct State {
     login_in_progress: bool,
 }
 
+const USERNAME_FIELD_ID: Id = Id::new("username_field_id");
+
 async fn login_request(state: State) -> Message {
     println!("username: {}, password: {}", state.username, state.password);
     let response = ipc::login(
@@ -68,21 +70,26 @@ fn view(state: &State) -> Element<'_, Message> {
         container(
             container(
                 column![
-                    text_input("Username", &state.username).on_input(Message::UsernameUpdate),
+                    text_input("Username", &state.username)
+                        .id(USERNAME_FIELD_ID)
+                        .on_input(Message::UsernameUpdate)
+                        .padding(10),
                     text_input("Password", &state.password)
                         .on_input(Message::PasswordUpdate)
-                        .secure(true),
-                    button("Login")
-                        .on_press_maybe((!(state.login_in_progress)).then_some(Message::Login)),
+                        .secure(true)
+                        .padding(10),
+                    button(
+                        text("Login")
+                            .width(Length::Fill)
+                            .align_x(Horizontal::Center),
+                    )
+                    .on_press_maybe((!(state.login_in_progress)).then_some(Message::Login))
+                    .width(Length::Fill)
+                    .padding(10),
+                    text(&state.error_text).color(color!(255, 0, 0)),
                 ]
-                .extend(
-                    (!&state.error_text.is_empty())
-                        .then(|| text(&state.error_text).color(color!(255, 0, 0)).into())
-                )
                 .spacing(5),
             )
-            .style(container::rounded_box)
-            .padding(30)
             .width(400)
             .height(200)
             .align_x(Horizontal::Center)
@@ -162,7 +169,7 @@ fn subscription(_state: &State) -> Subscription<Message> {
     })
 }
 
-pub fn main() -> iced::Result {
+fn boot() -> (State, Task<Message>) {
     let args: Vec<String> = env::args().collect();
     let sessions_path = Path::new(args.get(1).expect("expected a path to the sessions folder"));
     let sessions = sessions::get_desktop_sessions(sessions_path);
@@ -176,16 +183,20 @@ pub fn main() -> iced::Result {
 
     println!("{:?}", sessions);
 
-    iced::application(
-        move || State {
+    (
+        State {
             sessions: sessions.clone(),
             selected_session: default_session.clone(),
             ..Default::default()
         },
-        update,
-        view,
+        operation::focus(USERNAME_FIELD_ID),
     )
-    .subscription(subscription)
-    .theme(Theme::CatppuccinLatte)
-    .run()
+}
+
+pub fn main() -> iced::Result {
+    iced::application(boot, update, view)
+        .title("OCF Greeter")
+        .subscription(subscription)
+        .theme(Theme::CatppuccinLatte)
+        .run()
 }
