@@ -47,7 +47,7 @@ pub async fn login(
                 } else {
                     starting = true;
                     next_request = Request::StartSession {
-                        env: vec![],
+                        env: vec!["XDG_SESSION_TYPE=wayland".to_string()],
                         cmd: vec![cmd.to_string()],
                     }
                 }
