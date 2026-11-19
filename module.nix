@@ -29,14 +29,32 @@ in
       type = lib.types.str;
       description = "the default session to select in the dropdown";
     };
+
+    displayScale = lib.mkOption {
+      type = lib.types.float;
+      default = 1.0;
+      description = "the display scale to pass to cage";
+    };
   };
 
   config = lib.mkIf cfg.enable {
     environment.etc."ocf-greeter/background.png".source = cfg.backgroundImage;
 
-    services.greetd = {
-      enable = true;
-      settings.default_session.command = "${lib.getExe' pkgs.dbus "dbus-run-session"} ${lib.getExe pkgs.cage} -s -- ${lib.getExe cfg.package} ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions ${cfg.defaultSession}";
-    };
+    services.greetd =
+      let
+        display-scale = (
+          pkgs.writeShellScript "display-scale" ''
+            for out in $(${lib.getExe pkgs.wlr-randr} --json | ${lib.getExe pkgs.jq} -r '.[].name'); do
+              ${lib.getExe pkgs.wlr-randr} --output "$out" --scale ${lib.strings.floatToString cfg.displayScale}
+            done
+
+            exec "$@"
+          ''
+        );
+      in
+      {
+        enable = true;
+        settings.default_session.command = "${lib.getExe' pkgs.dbus "dbus-run-session"} ${lib.getExe pkgs.cage} -s -- ${display-scale} ${lib.getExe cfg.package} ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions ${cfg.defaultSession}";
+      };
   };
 }
