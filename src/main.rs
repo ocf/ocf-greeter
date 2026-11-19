@@ -40,7 +40,6 @@ struct State {
 const USERNAME_FIELD_ID: Id = Id::new("username_field_id");
 
 async fn login_request(state: State) -> Message {
-    println!("username: {}, password: {}", state.username, state.password);
     let response = ipc::login(
         &state.selected_session.exec,
         state.username.clone(),
