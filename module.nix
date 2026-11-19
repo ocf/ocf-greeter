@@ -38,6 +38,5 @@ in
       enable = true;
       settings.default_session.command = "${lib.getExe' pkgs.dbus "dbus-run-session"} ${lib.getExe pkgs.cage} -s -- ${lib.getExe cfg.package} ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions ${cfg.defaultSession}";
     };
-    security.pam.services.greetd.makeHomeDir = true;
   };
 }
