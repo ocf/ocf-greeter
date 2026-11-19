@@ -37,6 +37,13 @@ in
     };
   };
 
+  disabledModules = [
+    "services/display-managers/greetd.nix"
+  ];
+  imports = [
+    ./greetd.nix
+  ];
+
   config = lib.mkIf cfg.enable {
     environment.etc."ocf-greeter/background.png".source = cfg.backgroundImage;
 
