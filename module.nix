@@ -54,20 +54,7 @@ in
       in
       {
         enable = true;
-        settings.default_session.command = "${lib.getExe' pkgs.kbd "openvt"} -s -f -- ${lib.getExe' pkgs.dbus "dbus-run-session"} ${lib.getExe pkgs.cage} -s -- ${display-scale} ${lib.getExe cfg.package} ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions ${cfg.defaultSession}";
-      };
-
-    systemd.services.greetd.unitConfig =
-      let
-        list = [
-          "getty@tty2.service"
-          "getty@tty3.service"
-          "getty@tty4.service"
-        ];
-      in
-      {
-        After = list;
-        Conflicts = list;
+        settings.default_session.command = "${lib.getExe' pkgs.dbus "dbus-run-session"} ${lib.getExe pkgs.cage} -s -- ${display-scale} ${lib.getExe cfg.package} ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions ${cfg.defaultSession}";
       };
   };
 }
