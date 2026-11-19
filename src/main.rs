@@ -194,7 +194,7 @@ fn boot() -> (State, Task<Message>) {
 
 pub fn main() -> iced::Result {
     iced::application(boot, update, view)
-        .scale_factor(|_state| 2.0)
+        .scale_factor(|_state| 1.8)
         .title("OCF Greeter")
         .subscription(subscription)
         .theme(Theme::CatppuccinLatte)
