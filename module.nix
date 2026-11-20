@@ -49,12 +49,14 @@ in
 
     services.greetd =
       let
+        kanshi-conf = pkgs.writeText "kanshi-conf" ''
+          profile {
+            output * enable scale ${lib.strings.floatToString cfg.displayScale}
+          }
+        '';
         display-scale = (
           pkgs.writeShellScript "display-scale" ''
-            for out in $(${lib.getExe pkgs.wlr-randr} --json | ${lib.getExe pkgs.jq} -r '.[].name'); do
-              ${lib.getExe pkgs.wlr-randr} --output "$out" --scale ${lib.strings.floatToString cfg.displayScale}
-            done
-
+            ${lib.getExe pkgs.kanshi} --config ${kanshi-conf} &
             exec "$@"
           ''
         );
