@@ -129,6 +129,7 @@ in
           tty = "tty${toString vtNum}";
           settings = cfg.settings // {
             terminal.vt = vtNum;
+            terminal.switch = false;
           };
         in
         {
