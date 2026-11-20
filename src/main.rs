@@ -134,7 +134,8 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::LoginSuccess => {
-            state.login_in_progress = false;
+            // don't set login_in_progress to false because user will get redirected to the DE
+            // automatically and shouldn't be able to click the login button again during loading
             Task::none()
         }
         Message::LoginFailure => {
