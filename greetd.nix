@@ -184,7 +184,7 @@ in
             # Don't kill a user session when using nixos-rebuild
             restartIfChanged = false;
 
-            wantedBy = [ "graphical.target" ];
+            wantedBy = lib.mkIf (vtNum == 1) [ "graphical.target" ];
           };
 
         }
