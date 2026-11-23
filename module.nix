@@ -1,5 +1,6 @@
 {
   config,
+  inputs,
   lib,
   pkgs,
   ...
@@ -37,33 +38,71 @@ in
     };
   };
 
+  # use unstable greetd module to have correct pam settings (inheriting `login` modules)
+  # FIXME: remove after 26.11 upgrade
   disabledModules = [
     "services/display-managers/greetd.nix"
   ];
   imports = [
-    ./greetd.nix
+    "${inputs.nixpkgs-unstable}/nixos/modules/services/display-managers/greetd.nix"
   ];
 
-  config = lib.mkIf cfg.enable {
-    environment.etc."ocf-greeter/background.png".source = cfg.backgroundImage;
+  config = lib.mkIf cfg.enable (
+    let
+      kanshi-conf = pkgs.writeText "kanshi-conf" ''
+        profile {
+          output * enable scale ${lib.strings.floatToString cfg.displayScale}
+        }
+      '';
+      display-scale = (
+        pkgs.writeShellScript "display-scale" ''
+          ${lib.getExe pkgs.kanshi} --config ${kanshi-conf} &
+          exec "$@"
+        ''
+      );
+      greeterCommand = "${lib.getExe' pkgs.dbus "dbus-run-session"} ${lib.getExe pkgs.cage} -s -- ${display-scale} ${lib.getExe cfg.package} ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions ${cfg.defaultSession}";
 
-    services.greetd =
-      let
-        kanshi-conf = pkgs.writeText "kanshi-conf" ''
-          profile {
-            output * enable scale ${lib.strings.floatToString cfg.displayScale}
-          }
-        '';
-        display-scale = (
-          pkgs.writeShellScript "display-scale" ''
-            ${lib.getExe pkgs.kanshi} --config ${kanshi-conf} &
-            exec "$@"
-          ''
-        );
-      in
-      {
-        enable = true;
-        settings.default_session.command = "${lib.getExe' pkgs.dbus "dbus-run-session"} ${lib.getExe pkgs.cage} -s -- ${display-scale} ${lib.getExe cfg.package} ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions ${cfg.defaultSession}";
+      greetdConfig = (pkgs.formats.toml { }).generate "greetd.toml" {
+        terminal.switch = false;
+        default_session = {
+          command = greeterCommand;
+          user = "greeter";
+        };
       };
-  };
+
+      mkGreetd =
+        vtNum:
+        lib.nameValuePair "autovt@tty${toString vtNum}" {
+          description = "greetd on tty${toString vtNum}";
+          after = [
+            "systemd-user-sessions.service"
+            "plymouth-quit-wait.service"
+          ];
+          conflicts = [ "getty@tty${toString vtNum}.service" ];
+          serviceConfig = {
+            ExecStart = "${pkgs.greetd}/bin/greetd --config ${greetdConfig} --vt ${toString vtNum}";
+            Restart = "no";
+
+            StandardInput = "tty";
+            StandardOutput = "journal";
+            StandardError = "journal";
+            TTYPath = "/dev/tty${toString vtNum}";
+            TTYReset = true;
+            TTYVHangup = true;
+          };
+        };
+    in
+    {
+      environment.etc."ocf-greeter/background.png".source = cfg.backgroundImage;
+
+      # greetd for tty1
+      services.greetd = {
+        enable = true;
+        settings.default_session.command = greeterCommand;
+      };
+
+      # fill tty 2-5 on demand with greetd (reserve tty6 for getty)
+      systemd.services = builtins.listToAttrs (map mkGreetd (lib.range 2 5));
+    }
+  );
 }
