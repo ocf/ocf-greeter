@@ -6,10 +6,10 @@ use iced::widget::{
 use iced::{
     ContentFit, Element, Event, Length, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
-    color,
+    color, window,
 };
-use std::env;
 use std::path::Path;
+use std::{env, fs};
 use sys_info::linux_os_release;
 mod ipc;
 mod sessions;
@@ -25,6 +25,7 @@ enum Message {
     FocusNext,
     FocusPrevious,
     SessionSelected(sessions::DesktopSession),
+    CheckCapsLock,
 }
 
 #[derive(Default, Clone)]
@@ -35,6 +36,7 @@ struct State {
     selected_session: sessions::DesktopSession,
     error_text: String,
     login_in_progress: bool,
+    caps_lock_enabled: bool,
 }
 
 const USERNAME_FIELD_ID: Id = Id::new("username_field_id");
@@ -60,6 +62,30 @@ async fn login_request(state: State) -> Message {
     }
 }
 
+fn is_caps_lock_on() -> bool {
+    let Ok(entries) = fs::read_dir("/sys/class/leds") else {
+        return false;
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name_str) = name.to_str() else {
+            continue;
+        };
+
+        if name_str.ends_with("::capslock") {
+            let brightness_path = entry.path().join("brightness");
+            if let Ok(val) = fs::read_to_string(&brightness_path) {
+                if val.trim() == "1" {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
 fn view(state: &State) -> Element<'_, Message> {
     stack![
         image("/etc/ocf-greeter/background.png")
@@ -73,10 +99,18 @@ fn view(state: &State) -> Element<'_, Message> {
                         .id(USERNAME_FIELD_ID)
                         .on_input(Message::UsernameUpdate)
                         .padding(10),
-                    text_input("Password", &state.password)
-                        .on_input(Message::PasswordUpdate)
-                        .secure(true)
-                        .padding(10),
+                    column![
+                        text_input("Password", &state.password)
+                            .on_input(Message::PasswordUpdate)
+                            .secure(true)
+                            .padding(10),
+                        text(if state.caps_lock_enabled {
+                            "Caps Lock is Enabled"
+                        } else {
+                            ""
+                        }),
+                    ]
+                    .spacing(0.5),
                     button(
                         text("Login")
                             .width(Length::Fill)
@@ -149,6 +183,10 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             println!("{:?}", error);
             Task::none()
         }
+        Message::CheckCapsLock => {
+            state.caps_lock_enabled = is_caps_lock_on();
+            Task::none()
+        }
     }
 }
 
@@ -165,6 +203,11 @@ fn subscription(_state: &State) -> Subscription<Message> {
             Key::Named(key::Named::Enter) => Some(Message::Login),
             _ => None,
         },
+        Event::Keyboard(keyboard::Event::KeyReleased { key, .. }) => match key {
+            Key::Named(key::Named::CapsLock) => Some(Message::CheckCapsLock),
+            _ => None,
+        },
+        Event::Window(window::Event::Focused) => Some(Message::CheckCapsLock),
         _ => None,
     })
 }
@@ -181,12 +224,15 @@ fn boot() -> (State, Task<Message>) {
         .cloned()
         .expect("failed default session matching");
 
+    let caps_lock_state = is_caps_lock_on();
+
     println!("{:?}", sessions);
 
     (
         State {
             sessions: sessions.clone(),
             selected_session: default_session.clone(),
+            caps_lock_enabled: caps_lock_state,
             ..Default::default()
         },
         operation::focus(USERNAME_FIELD_ID),
