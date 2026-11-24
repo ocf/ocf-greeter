@@ -1,7 +1,7 @@
 use iced::keyboard::{self, Key, key};
 use iced::widget::{
-    Id, bottom, bottom_right, button, column, container, image, operation, pick_list, stack, text,
-    text_input,
+    Id, Space, bottom, bottom_right, button, column, container, image, operation, pick_list, stack,
+    text, text_input,
 };
 use iced::{
     ContentFit, Element, Event, Length, Subscription, Task, Theme,
@@ -26,6 +26,7 @@ enum Message {
     FocusPrevious,
     SessionSelected(sessions::DesktopSession),
     CheckCapsLock,
+    ToggleOutOfOrder,
 }
 
 #[derive(Default, Clone)]
@@ -37,9 +38,16 @@ struct State {
     error_text: String,
     login_in_progress: bool,
     caps_lock_enabled: bool,
+    out_of_order: bool,
 }
 
 const USERNAME_FIELD_ID: Id = Id::new("username_field_id");
+
+const ASSETS_ROOT: &str = if !cfg!(debug_assertions) {
+    "/etc/ocf-greeter"
+} else {
+    "assets"
+};
 
 async fn login_request(state: State) -> Message {
     let response = ipc::login(
@@ -88,52 +96,61 @@ fn is_caps_lock_on() -> bool {
 
 fn view(state: &State) -> Element<'_, Message> {
     stack![
-        image("/etc/ocf-greeter/background.png")
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .content_fit(ContentFit::Cover),
-        container(
+        image(if !state.out_of_order {
+            format!("{}/background.png", ASSETS_ROOT)
+        } else {
+            // FIXME: add final out of order wallpaper
+            format!("{}/out-of-order.png", ASSETS_ROOT)
+        })
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .content_fit(ContentFit::Cover),
+        if !state.out_of_order {
             container(
-                column![
-                    text_input("Username", &state.username)
-                        .id(USERNAME_FIELD_ID)
-                        .on_input(Message::UsernameUpdate)
-                        .padding(10),
+                container(
                     column![
-                        text_input("Password", &state.password)
-                            .on_input(Message::PasswordUpdate)
-                            .secure(true)
+                        text_input("Username", &state.username)
+                            .id(USERNAME_FIELD_ID)
+                            .on_input(Message::UsernameUpdate)
                             .padding(10),
-                        text(if state.caps_lock_enabled {
-                            "Caps Lock is Enabled"
-                        } else {
-                            ""
-                        }),
+                        column![
+                            text_input("Password", &state.password)
+                                .on_input(Message::PasswordUpdate)
+                                .secure(true)
+                                .padding(10),
+                            text(if state.caps_lock_enabled {
+                                "Caps Lock is Enabled"
+                            } else {
+                                ""
+                            }),
+                        ]
+                        .spacing(0.5),
+                        button(
+                            text("Login")
+                                .width(Length::Fill)
+                                .align_x(Horizontal::Center),
+                        )
+                        .on_press_maybe((!(state.login_in_progress)).then_some(Message::Login))
+                        .width(Length::Fill)
+                        .padding(10),
+                        text(&state.error_text).color(color!(255, 0, 0)),
                     ]
-                    .spacing(0.5),
-                    button(
-                        text("Login")
-                            .width(Length::Fill)
-                            .align_x(Horizontal::Center),
-                    )
-                    .on_press_maybe((!(state.login_in_progress)).then_some(Message::Login))
-                    .width(Length::Fill)
-                    .padding(10),
-                    text(&state.error_text).color(color!(255, 0, 0)),
-                ]
-                .spacing(5),
+                    .spacing(5),
+                )
+                .width(400)
+                .height(200)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Center),
             )
-            .width(400)
-            .height(200)
-            .align_x(Horizontal::Center)
-            .align_y(Vertical::Center),
-        )
-        .center_x(Length::Fill)
-        .center_y(Length::Fill),
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+        } else {
+            container(Space::new())
+        },
         bottom_right(pick_list(
             state.sessions.as_slice(),
             Some(&state.selected_session),
-            Message::SessionSelected
+            Message::SessionSelected,
         ))
         .padding(5),
         bottom(text(linux_os_release().unwrap().build_id.unwrap())).padding(5)
@@ -187,6 +204,10 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             state.caps_lock_enabled = is_caps_lock_on();
             Task::none()
         }
+        Message::ToggleOutOfOrder => {
+            state.out_of_order = !state.out_of_order;
+            Task::none()
+        }
     }
 }
 
@@ -201,6 +222,11 @@ fn subscription(_state: &State) -> Subscription<Message> {
                 }
             }
             Key::Named(key::Named::Enter) => Some(Message::Login),
+            Key::Character(c)
+                if (c == "o" || c == "O") && modifiers.shift() && modifiers.control() =>
+            {
+                Some(Message::ToggleOutOfOrder)
+            }
             _ => None,
         },
         Event::Keyboard(keyboard::Event::KeyReleased { key, .. }) => match key {
