@@ -4,8 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chrono = "0.4.45"
 freedesktop-desktop-entry = "0.8.4"
 greetd_ipc = { version = "0.10.3", features = ["sync-codec"] }
-iced = { version = "0.14.0", features = ["image", "tokio"] }
+iced = { version = "0.14.0", features = ["image", "tokio", "advanced"] }
 sys-info = "0.9.1"
 tokio = "1.54.1"
+
+[features]
+debug_layout = []
+

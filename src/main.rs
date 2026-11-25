@@ -4,15 +4,16 @@ use iced::widget::{
     text, text_input,
 };
 use iced::{
-    ContentFit, Element, Event, Length, Subscription, Task, Theme,
+    Color, ContentFit, Element, Event, Font, Length, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
-    color, window,
+    color, font, padding, window,
 };
 use std::path::Path;
 use std::{env, fs};
 use sys_info::linux_os_release;
 mod ipc;
 mod sessions;
+use chrono::{DateTime, Local};
 
 #[derive(Debug, Clone)]
 enum Message {
@@ -27,6 +28,7 @@ enum Message {
     SessionSelected(sessions::DesktopSession),
     CheckCapsLock,
     ToggleOutOfOrder,
+    Tick(DateTime<Local>),
 }
 
 #[derive(Default, Clone)]
@@ -39,6 +41,7 @@ struct State {
     login_in_progress: bool,
     caps_lock_enabled: bool,
     out_of_order: bool,
+    time: DateTime<Local>,
 }
 
 const USERNAME_FIELD_ID: Id = Id::new("username_field_id");
@@ -48,6 +51,8 @@ const ASSETS_ROOT: &str = if !cfg!(debug_assertions) {
 } else {
     "assets"
 };
+
+const WINDOW_DECORATIONS_ENABLED: bool = cfg!(debug_assertions);
 
 async fn login_request(state: State) -> Message {
     let response = ipc::login(
@@ -95,7 +100,7 @@ fn is_caps_lock_on() -> bool {
 }
 
 fn view(state: &State) -> Element<'_, Message> {
-    stack![
+    let view: Element<'_, Message> = stack![
         image(if !state.out_of_order {
             format!("{}/background.png", ASSETS_ROOT)
         } else {
@@ -153,9 +158,32 @@ fn view(state: &State) -> Element<'_, Message> {
             Message::SessionSelected,
         ))
         .padding(5),
+        container(
+            column![
+                text(state.time.format("%H:%M").to_string())
+                    .size(75)
+                    .font(Font {
+                        weight: font::Weight::Bold,
+                        ..Font::default()
+                    }),
+                text(state.time.format("%Y-%m-%d").to_string()).size(25)
+            ]
+            .spacing(0)
+            .align_x(Horizontal::Center)
+        )
+        .padding(padding::right(20.0))
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_y(Vertical::Top)
+        .align_x(Horizontal::Right),
         bottom(text(linux_os_release().unwrap().build_id.unwrap())).padding(5)
     ]
-    .into()
+    .into();
+
+    if cfg!(feature = "debug_layout") {
+        return view.explain(Color::BLACK);
+    }
+    view
 }
 
 fn update(state: &mut State, message: Message) -> Task<Message> {
@@ -208,34 +236,41 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             state.out_of_order = !state.out_of_order;
             Task::none()
         }
+        Message::Tick(now) => {
+            state.time = now;
+            Task::none()
+        }
     }
 }
 
 fn subscription(_state: &State) -> Subscription<Message> {
-    iced::event::listen_with(|event, _status, _window| match event {
-        Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => match key {
-            Key::Named(key::Named::Tab) => {
-                if modifiers.shift() {
-                    Some(Message::FocusPrevious)
-                } else {
-                    Some(Message::FocusNext)
+    Subscription::batch(vec![
+        iced::event::listen_with(|event, _status, _window| match event {
+            Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => match key {
+                Key::Named(key::Named::Tab) => {
+                    if modifiers.shift() {
+                        Some(Message::FocusPrevious)
+                    } else {
+                        Some(Message::FocusNext)
+                    }
                 }
-            }
-            Key::Named(key::Named::Enter) => Some(Message::Login),
-            Key::Character(c)
-                if (c == "o" || c == "O") && modifiers.shift() && modifiers.control() =>
-            {
-                Some(Message::ToggleOutOfOrder)
-            }
+                Key::Named(key::Named::Enter) => Some(Message::Login),
+                Key::Character(c)
+                    if (c == "o" || c == "O") && modifiers.shift() && modifiers.control() =>
+                {
+                    Some(Message::ToggleOutOfOrder)
+                }
+                _ => None,
+            },
+            Event::Keyboard(keyboard::Event::KeyReleased { key, .. }) => match key {
+                Key::Named(key::Named::CapsLock) => Some(Message::CheckCapsLock),
+                _ => None,
+            },
+            Event::Window(window::Event::Focused) => Some(Message::CheckCapsLock),
             _ => None,
-        },
-        Event::Keyboard(keyboard::Event::KeyReleased { key, .. }) => match key {
-            Key::Named(key::Named::CapsLock) => Some(Message::CheckCapsLock),
-            _ => None,
-        },
-        Event::Window(window::Event::Focused) => Some(Message::CheckCapsLock),
-        _ => None,
-    })
+        }),
+        iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::Tick(Local::now())),
+    ])
 }
 
 fn boot() -> (State, Task<Message>) {
@@ -252,6 +287,8 @@ fn boot() -> (State, Task<Message>) {
 
     let caps_lock_state = is_caps_lock_on();
 
+    let current_time = Local::now();
+
     println!("{:?}", sessions);
 
     (
@@ -259,6 +296,7 @@ fn boot() -> (State, Task<Message>) {
             sessions: sessions.clone(),
             selected_session: default_session.clone(),
             caps_lock_enabled: caps_lock_state,
+            time: current_time,
             ..Default::default()
         },
         operation::focus(USERNAME_FIELD_ID),
@@ -270,5 +308,9 @@ pub fn main() -> iced::Result {
         .title("OCF Greeter")
         .subscription(subscription)
         .theme(Theme::CatppuccinLatte)
+        .window(window::Settings {
+            decorations: WINDOW_DECORATIONS_ENABLED,
+            ..Default::default()
+        })
         .run()
 }
