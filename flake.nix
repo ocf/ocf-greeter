@@ -62,14 +62,20 @@
 
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            rustc
-            cargo
             rustfmt
             clippy
             rust-analyzer
           ];
-          env.RUSTFLAGS = "-C link-arg=-Wl,-rpath,${pkgs.lib.makeLibraryPath dlopenLibraries}";
-          nativeBuildInputs = [ treefmtConfig.config.build.wrapper ];
+          nativeBuildInputs = with pkgs; [
+            treefmtConfig.config.build.wrapper
+
+            rustc
+            cargo
+            pkg-config
+            clang
+            mold
+          ];
+          env.RUSTFLAGS = "-C link-arg=-fuse-ld=mold -C target-cpu=native -C link-arg=-Wl,-rpath,${pkgs.lib.makeLibraryPath dlopenLibraries}";
         };
       }
     );
