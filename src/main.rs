@@ -1,7 +1,7 @@
 use iced::keyboard::{self, Key, key};
 use iced::widget::{
-    Id, Space, bottom, bottom_right, button, column, container, image, operation, pick_list, stack,
-    text, text_input,
+    Id, Space, bottom, bottom_right, button, column, container, container::rounded_box, image,
+    operation, pick_list, stack, text, text_input,
 };
 use iced::{
     Color, ContentFit, Element, Event, Font, Length, Subscription, Task, Theme,
@@ -14,6 +14,15 @@ use sys_info::linux_os_release;
 mod ipc;
 mod sessions;
 use chrono::{DateTime, Local};
+use iced_aw::Spinner;
+
+#[derive(Default, Clone)]
+enum LoginStatus {
+    #[default]
+    Idle,
+    Loading,
+    Complete,
+}
 
 #[derive(Debug, Clone)]
 enum Message {
@@ -38,7 +47,7 @@ struct State {
     sessions: Vec<sessions::DesktopSession>,
     selected_session: sessions::DesktopSession,
     error_text: String,
-    login_in_progress: bool,
+    login_status: LoginStatus,
     caps_lock_enabled: bool,
     out_of_order: bool,
     time: DateTime<Local>,
@@ -110,7 +119,21 @@ fn view(state: &State) -> Element<'_, Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .content_fit(ContentFit::Cover),
-        if !state.out_of_order {
+        if state.out_of_order {
+            // don't show login boxes if marked out of order
+            container(Space::new())
+        } else if matches!(state.login_status, LoginStatus::Complete) {
+            // show spinner and hide login boxes while the DE is starting
+            container(
+                container(Spinner::new())
+                    .style(rounded_box)
+                    .padding(10)
+                    .align_x(Horizontal::Center)
+                    .align_y(Vertical::Center),
+            )
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+        } else {
             container(
                 container(
                     column![
@@ -135,7 +158,10 @@ fn view(state: &State) -> Element<'_, Message> {
                                 .width(Length::Fill)
                                 .align_x(Horizontal::Center),
                         )
-                        .on_press_maybe((!(state.login_in_progress)).then_some(Message::Login))
+                        .on_press_maybe(
+                            matches!(state.login_status, LoginStatus::Idle)
+                                .then_some(Message::Login)
+                        )
                         .width(Length::Fill)
                         .padding(10),
                         text(&state.error_text).color(color!(255, 0, 0)),
@@ -149,8 +175,6 @@ fn view(state: &State) -> Element<'_, Message> {
             )
             .center_x(Length::Fill)
             .center_y(Length::Fill)
-        } else {
-            container(Space::new())
         },
         bottom_right(pick_list(
             state.sessions.as_slice(),
@@ -197,10 +221,12 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::Login => {
-            match state.login_in_progress || state.username.is_empty() || state.password.is_empty()
+            match !matches!(state.login_status, LoginStatus::Idle)
+                || state.username.is_empty()
+                || state.password.is_empty()
             {
                 false => {
-                    state.login_in_progress = true;
+                    state.login_status = LoginStatus::Loading;
                     Task::future(login_request(state.clone()))
                 }
                 true => Task::none(),
@@ -213,17 +239,16 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::LoginSuccess => {
-            // don't set login_in_progress to false because user will get redirected to the DE
-            // automatically and shouldn't be able to click the login button again during loading
+            state.login_status = LoginStatus::Complete;
             Task::none()
         }
         Message::LoginFailure => {
-            state.login_in_progress = false;
+            state.login_status = LoginStatus::Idle;
             state.error_text = "Login Failed".into();
             Task::none()
         }
         Message::LoginError(error) => {
-            state.login_in_progress = false;
+            state.login_status = LoginStatus::Idle;
             state.error_text = format!("Error: {}", error);
             println!("{:?}", error);
             Task::none()
