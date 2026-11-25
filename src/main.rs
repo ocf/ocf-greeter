@@ -281,7 +281,7 @@ fn boot() -> (State, Task<Message>) {
 
     let default_session = sessions
         .iter()
-        .find(|item| &item.name == default_session_arg)
+        .find(|item| &item.id == default_session_arg)
         .cloned()
         .expect("failed default session matching");
 
